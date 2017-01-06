@@ -1,0 +1,51 @@
+:local addresses "8.8.8.8,8.8.4.4,77.88.8.8,77.88.8.1,77.88.8.88,77.88.8.2";
+:local TimePowerReset 5;
+
+:local CommentRule "LTE Automation Script From vasilevkirill.com";
+:local CountLteAllInterface [/interface lte print count-only];
+:local CountLteSettingsInterface [/interface lte print count-only where comment="$CommentRule"];
+:local Continue false;
+:local NeedTest true;
+
+:if ($CountLteAllInterface = 0) do={
+    :set Continue false;
+    :set NeedTest false;
+} else={
+    :set Continue true;
+}
+
+:if ($Continue and $CountLteSettingsInterface=0) do={
+    :local LteNameInterface [/interface lte get [find] name];
+    /interface lte set comment="$CommentRule" [find]
+    /ip firewall nat remove [find comment="$CommentRule"]
+    /ip firewall nat add action=masquerade chain=srcnat out-interface="$LteNameInterface" disabled=no comment="$CommentRule"
+    /ip dhcp-client remove [find comment="$CommentRule"]
+    /ip dhcp-client add default-route-distance=50 disabled=no interface="$LteNameInterface" comment="$CommentRule"
+    /ping 127.0.0.1 count=15
+    :local LTEgateway [/ip route get [find dst-address="0.0.0.0/0" distance=50] gateway]
+    /ip route remove [find routing-mark="$CommentRule"]
+    /ip route add disable=no routing-mark="$CommentRule" gateway=$LTEgateway dst-address="0.0.0.0/0" comment="$CommentRule"
+    /ip route rule remove [find comment="$CommentRule"]
+    /ip route rule add action=lookup-only-in-table routing-mark="$CommentRule" table="$CommentRule" comment="$CommentRule"
+    :set Continue false;
+    :set NeedTest false;
+}
+
+:if ($NeedTest) do={
+    :local InternetIsset false
+    :local addr [:toarray $addresses]
+    :foreach ipp in $addr do={
+        :if ($InternetIsset=false) do={
+            :if ([/ping address=$ipp routing-table="$CommentRule"  count=3] = 0) do={
+                /log warning message="Test LTE Internet fail address $ipp"
+            } else={
+                /log warning message="Test LTE Internet success $ipp"
+                :set InternetIsset true;
+            }
+        }
+    }
+
+    :if ($InternetIsset=false) do={
+        /system routerboard usb power-reset duration=$TimePowerReset
+    }
+}
