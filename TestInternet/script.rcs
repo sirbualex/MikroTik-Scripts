@@ -1,0 +1,16 @@
+:local addr [:toarray "8.8.8.8,8.8.4.4,77.88.8.8,77.88.8.1,77.88.8.88,77.88.8.2"];
+:local InternetIsset false;
+:foreach ipp in $addr do={
+	:if ($InternetIsset=false) do={
+		:if ([/ping address=$ipp routing-table="onlyLTE" count=3] = 0) do={
+			/log warning message="LTE Internet fail for address $ipp";
+		} else={
+			/log warning message="LTE Internet for success $ipp";
+			:set InternetIsset true;
+		}
+	}
+}
+:if ($InternetIsset=false) do={
+	/log warning message="USB Power Reset Action";
+	/system routerboard usb power-reset duration=5;
+}
